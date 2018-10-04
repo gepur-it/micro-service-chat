@@ -20,7 +20,7 @@ type Message struct {
 }
 
 type ErpToSocketMessage struct {
-	AppealID string `json:"appealId"`
+	AppealID string  `json:"appealId"`
 	Message  Message `json:"message"`
 }
 
@@ -37,7 +37,6 @@ func failOnError(err error, msg string) {
 func init() {
 	err := godotenv.Load()
 	failOnError(err, "Error loading .env file")
-
 	cs := fmt.Sprintf("amqp://%s:%s@%s:%s/%s",
 		os.Getenv("RABBITMQ_ERP_LOGIN"),
 		os.Getenv("RABBITMQ_ERP_PASS"),
@@ -72,13 +71,11 @@ func home(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "home.html")
 }
 
-
 func ws(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	log.Printf("Socket connects: %s %s %s", r.RemoteAddr, r.Proto, r.Method)
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	failOnError(err, "Can`t upgrade web socket")
-
 
 	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)}
 	client.hub.register <- client

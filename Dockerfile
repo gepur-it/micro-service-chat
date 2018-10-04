@@ -4,7 +4,7 @@ COPY . /app
 RUN go get github.com/joho/godotenv
 RUN go get github.com/streadway/amqp
 RUN go get github.com/gorilla/websocket
-
+RUN go get github.com/globalsign/mgo
 CMD ["go", "run", "main.go", "hub.go", "client.go"]
 EXPOSE 80
 

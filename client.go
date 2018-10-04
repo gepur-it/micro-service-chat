@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/globalsign/mgo"
+	"github.com/globalsign/mgo/bson"
 	"github.com/streadway/amqp"
 	"log"
+	"os"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -36,22 +39,29 @@ var upgrader = websocket.Upgrader{
 }
 
 type Client struct {
-	hub *Hub
-	conn *websocket.Conn
-	send chan []byte
+	hub       *Hub
+	conn      *websocket.Conn
+	send      chan []byte
 	subscribe Subscribe
 }
 
 type Subscribe struct {
 	AppealID string `json:"appealId"`
-	ApiKey string `json:"apiKey"`
+	ApiKey   string `json:"apiKey"`
 }
 
 type SendMessageBack struct {
-	ConversationId int `json:"conversationId"`
-	Message string `json:"message"`
+	ConversationId int    `json:"conversationId"`
+	Message        string `json:"message"`
 }
 
+type User struct {
+	ID           string    `json:"_id"`
+	Username     string    `json:"username"`
+	UserID       string    `json:"userId"`
+	ObjectGUID   string    `json:"objectGUID"`
+	LastActivity time.Time `json:"lastActivity"`
+}
 
 func (currentClient *Client) readPump() {
 	defer func() {
@@ -88,6 +98,29 @@ func (currentClient *Client) readPump() {
 				break
 			}
 
+			mongoDBDialInfo := &mgo.DialInfo{
+				Addrs:    []string{os.Getenv("MONGODB_HOST")},
+				Timeout:  60 * time.Second,
+				Database: os.Getenv("MONGODB_DB"),
+				Username: os.Getenv("MONGODB_USER"),
+				Password: os.Getenv("MONGODB_PASSWORD"),
+			}
+
+			mgoSession, err := mgo.DialWithInfo(mongoDBDialInfo)
+			failOnError(err, "Failed connect to mongo")
+			mgoSession.SetMode(mgo.Monotonic, true)
+
+			user := User{}
+			connection := mgoSession.DB(os.Getenv("MONGODB_DB")).C("UserApiKey")
+
+			err = connection.Find(bson.M{"_id": subscribe.ApiKey}).One(&user)
+
+			if err != nil {
+				log.Printf("Hasta la vista, baby! User %s not accept to connect this chat . Err: %s", currentClient.conn.RemoteAddr(), err)
+
+				break
+			}
+
 			currentClient.subscribe = subscribe
 			log.Printf("Client %s subscribe to appeal: %s", currentClient.subscribe.AppealID, currentClient.conn.RemoteAddr())
 		} else {
@@ -97,6 +130,7 @@ func (currentClient *Client) readPump() {
 			if err != nil || len(sendMessageBack.Message) == 0 {
 				log.Printf("Hasta la vista, baby! Wrong message: %s from %s", message, currentClient.conn.RemoteAddr())
 				currentClient.hub.unregister <- currentClient
+
 				break
 			}
 
@@ -142,44 +176,43 @@ func (currentClient *Client) writePump() {
 
 	for {
 		select {
-			case message, ok := <-currentClient.send:
-				currentClient.conn.SetWriteDeadline(time.Now().Add(writeWait))
+		case message, ok := <-currentClient.send:
+			currentClient.conn.SetWriteDeadline(time.Now().Add(writeWait))
 
-				if !ok {
-					// The hub closed the channel.
-					currentClient.conn.WriteMessage(websocket.CloseMessage, []byte{})
-					return
-				}
+			if !ok {
+				// The hub closed the channel.
+				currentClient.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
 
-				w, err := currentClient.conn.NextWriter(websocket.TextMessage)
+			w, err := currentClient.conn.NextWriter(websocket.TextMessage)
 
-				if err != nil {
-					return
-				}
+			if err != nil {
+				return
+			}
 
-				w.Write(message)
+			w.Write(message)
 
-				// Add queued chat messages to the current websocket message.
-				n := len(currentClient.send)
+			// Add queued chat messages to the current websocket message.
+			n := len(currentClient.send)
 
-				for i := 0; i < n; i++ {
-					w.Write(newline)
-					w.Write(<-currentClient.send)
-				}
+			for i := 0; i < n; i++ {
+				w.Write(newline)
+				w.Write(<-currentClient.send)
+			}
 
-				if err := w.Close(); err != nil {
-					return
-				}
+			if err := w.Close(); err != nil {
+				return
+			}
 
-				log.Printf("Socket send message: %s from %s", message, currentClient.conn.RemoteAddr())
-
+			log.Printf("Socket send message: %s from %s", message, currentClient.conn.RemoteAddr())
 
 		case <-ticker.C:
-				currentClient.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			currentClient.conn.SetWriteDeadline(time.Now().Add(writeWait))
 
-				if err := currentClient.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-					return
-				}
+			if err := currentClient.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
 
 		}
 	}
@@ -217,7 +250,7 @@ func (currentClient *Client) query() {
 
 			currentClient.hub.notification <- erpToSocketMessage
 
-			log.Printf("Read from query message %s for appeal %s",erpToSocketMessage.Message.Message, erpToSocketMessage.AppealID)
+			log.Printf("Read from query message %s for appeal %s", erpToSocketMessage.Message.Message, erpToSocketMessage.AppealID)
 		}
 	}()
 
