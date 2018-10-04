@@ -121,11 +121,12 @@ func (currentClient *Client) readPump() {
 
 			if err != nil {
 				log.Printf("Hasta la vista, baby! User %s not accept to connect this chat . Err: %s", currentClient.conn.RemoteAddr(), err)
-
+				mgoSession.Close()
 				break
 			}
 
 			currentClient.subscribe = subscribe
+			mgoSession.Close()
 			log.Printf("Client %s subscribe to appeal: %s", currentClient.subscribe.AppealID, currentClient.conn.RemoteAddr())
 		} else {
 			sendMessageBack := SendMessageBack{}
