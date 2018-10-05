@@ -97,7 +97,7 @@ func (currentClient *Client) readPump() {
 
 		logger.WithFields(logrus.Fields{
 			"addr": currentClient.conn.RemoteAddr(),
-		}).Warn("Socket receive message:")
+		}).Info("Socket receive message:")
 
 		if len(currentClient.subscribe.ApiKey) == 0 || len(currentClient.subscribe.AppealID) == 0 {
 			subscribe := Subscribe{}
