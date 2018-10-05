@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 	"github.com/joho/godotenv"
+	"github.com/sirupsen/logrus"
 	"github.com/streadway/amqp"
-	"log"
 	"net/http"
 	"os"
 )
@@ -26,17 +26,39 @@ type ErpToSocketMessage struct {
 
 var AMQPConnection *amqp.Connection
 var AMQPChannel *amqp.Channel
+var logger = logrus.New()
 
 func failOnError(err error, msg string) {
 	if err != nil {
-		log.Fatalf("%s: %s", msg, err)
+		logger.WithFields(logrus.Fields{
+			"error": err,
+		}).Fatal(msg)
 		panic(fmt.Sprintf("%s: %s", msg, err))
 	}
 }
 
 func init() {
 	err := godotenv.Load()
-	failOnError(err, "Error loading .env file")
+	if err != nil {
+		panic(fmt.Sprintf("%s: %s", "Error loading .env file", err))
+	}
+
+	if os.Getenv("APP_ENV") == "prod" {
+		file, err := os.OpenFile(os.Getenv("LOG_FILE"), os.O_CREATE|os.O_WRONLY, 0666)
+
+		if err != nil {
+			panic(fmt.Sprintf("%s: %s", "Failed log to file", err))
+		}
+
+		logger.SetLevel(logrus.ErrorLevel)
+		logger.SetOutput(file)
+		logger.SetFormatter(&logrus.JSONFormatter{})
+	} else {
+		logger.SetLevel(logrus.DebugLevel)
+		logger.SetOutput(os.Stdout)
+		logger.SetFormatter(&logrus.TextFormatter{})
+	}
+
 	cs := fmt.Sprintf("amqp://%s:%s@%s:%s/%s",
 		os.Getenv("RABBITMQ_ERP_LOGIN"),
 		os.Getenv("RABBITMQ_ERP_PASS"),
@@ -56,15 +78,27 @@ func init() {
 }
 
 func home(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Http connects: %s %s %s", r.RemoteAddr, r.Proto, r.Method)
+
+	logger.WithFields(logrus.Fields{
+		"addr":   r.RemoteAddr,
+		"method": r.Method,
+	}).Info("Http connect:")
 
 	if r.URL.Path != "/" {
 		http.Error(w, "Not found", http.StatusNotFound)
+		logger.WithFields(logrus.Fields{
+			"addr":   r.RemoteAddr,
+			"method": r.Method,
+		}).Warn("Not allowed path:")
 		return
 	}
 
 	if r.Method != "GET" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		logger.WithFields(logrus.Fields{
+			"addr":   r.RemoteAddr,
+			"method": r.Method,
+		}).Warn("Not allowed method:")
 		return
 	}
 
@@ -72,7 +106,10 @@ func home(w http.ResponseWriter, r *http.Request) {
 }
 
 func ws(hub *Hub, w http.ResponseWriter, r *http.Request) {
-	log.Printf("Socket connects: %s %s %s", r.RemoteAddr, r.Proto, r.Method)
+	logger.WithFields(logrus.Fields{
+		"addr":   r.RemoteAddr,
+		"method": r.Method,
+	}).Info("Socket connect:")
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	failOnError(err, "Can`t upgrade web socket")
@@ -95,7 +132,9 @@ func main() {
 		ws(hub, w, r)
 	})
 
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", os.Getenv("PACT_LISTEN_PORT")), nil))
+	logger.WithFields(logrus.Fields{
+		"port": os.Getenv("PACT_LISTEN_PORT"),
+	}).Fatal(http.ListenAndServe(fmt.Sprintf(":%s", os.Getenv("PACT_LISTEN_PORT")), nil))
 
 	defer AMQPConnection.Close()
 	defer AMQPChannel.Close()

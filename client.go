@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/globalsign/mgo"
 	"github.com/globalsign/mgo/bson"
+	"github.com/sirupsen/logrus"
 	"github.com/streadway/amqp"
 	"log"
 	"net/http"
@@ -83,21 +84,36 @@ func (currentClient *Client) readPump() {
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("error: %v", err)
+				logger.WithFields(logrus.Fields{
+					"error": err,
+					"addr":  currentClient.conn.RemoteAddr(),
+				}).Error("Socket error:")
 			}
 
 			break
 		}
 
 		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
-		log.Printf("Socket recieve message: %s from %s", message, currentClient.conn.RemoteAddr())
+
+		logger.WithFields(logrus.Fields{
+			"addr": currentClient.conn.RemoteAddr(),
+		}).Warn("Socket receive message:")
 
 		if len(currentClient.subscribe.ApiKey) == 0 || len(currentClient.subscribe.AppealID) == 0 {
 			subscribe := Subscribe{}
 			err = json.Unmarshal(message, &subscribe)
 
 			if err != nil || len(subscribe.ApiKey) == 0 || len(subscribe.AppealID) == 0 {
-				log.Printf("Hasta la vista, baby! Can`t decode subscribe message: %s from %s", message, currentClient.conn.RemoteAddr())
+				logger.WithFields(logrus.Fields{
+					"addr": currentClient.conn.RemoteAddr(),
+				}).Warn("Hasta la vista, baby! Can`t decode subscribe message:")
+
 				currentClient.hub.unregister <- currentClient
+
+				logger.WithFields(logrus.Fields{
+					"addr":   currentClient.conn.RemoteAddr(),
+					"appeal": currentClient.subscribe.AppealID,
+				}).Warn("Unregister current client:")
 
 				break
 			}
@@ -120,21 +136,41 @@ func (currentClient *Client) readPump() {
 			err = connection.Find(bson.M{"_id": subscribe.ApiKey}).One(&user)
 
 			if err != nil {
-				log.Printf("Hasta la vista, baby! User %s not accept to connect this chat . Err: %s", currentClient.conn.RemoteAddr(), err)
+				logger.WithFields(logrus.Fields{
+					"error":  err,
+					"addr":   currentClient.conn.RemoteAddr(),
+					"appeal": currentClient.subscribe.AppealID,
+				}).Warn("Hasta la vista, baby! User %s not accept to connect this chat:")
+
 				mgoSession.Close()
 				break
 			}
 
 			currentClient.subscribe = subscribe
 			mgoSession.Close()
-			log.Printf("Client %s subscribe to appeal: %s", currentClient.subscribe.AppealID, currentClient.conn.RemoteAddr())
+
+			logger.WithFields(logrus.Fields{
+				"addr":   currentClient.conn.RemoteAddr(),
+				"appeal": currentClient.subscribe.AppealID,
+			}).Info("Client subscribe to appeal:")
+
 		} else {
 			sendMessageBack := SendMessageBack{}
 			err = json.Unmarshal(message, &sendMessageBack)
 
 			if err != nil || len(sendMessageBack.Message) == 0 {
-				log.Printf("Hasta la vista, baby! Wrong message: %s from %s", message, currentClient.conn.RemoteAddr())
+
+				logger.WithFields(logrus.Fields{
+					"addr":   currentClient.conn.RemoteAddr(),
+					"appeal": currentClient.subscribe.AppealID,
+				}).Warn("Hasta la vista, baby! Wrong message:")
+
 				currentClient.hub.unregister <- currentClient
+
+				logger.WithFields(logrus.Fields{
+					"addr":   currentClient.conn.RemoteAddr(),
+					"appeal": currentClient.subscribe.AppealID,
+				}).Warn("Unregister current client:")
 
 				break
 			}
@@ -166,7 +202,10 @@ func (currentClient *Client) readPump() {
 
 			failOnError(err, "Failed to publish a message")
 
-			log.Printf("Anwser message %s to conversation %s", sendMessageBack.Message, sendMessageBack.ConversationId)
+			logger.WithFields(logrus.Fields{
+				"conversation": sendMessageBack.ConversationId,
+				"addr":         currentClient.conn.RemoteAddr(),
+			}).Info("Client send answer message to conversation:")
 		}
 	}
 }
@@ -210,7 +249,10 @@ func (currentClient *Client) writePump() {
 				return
 			}
 
-			log.Printf("Socket send message: %s from %s", message, currentClient.conn.RemoteAddr())
+			logger.WithFields(logrus.Fields{
+				"addr":   currentClient.conn.RemoteAddr(),
+				"appeal": currentClient.subscribe.AppealID,
+			}).Info("Socket send message to client:")
 
 		case <-ticker.C:
 			currentClient.conn.SetWriteDeadline(time.Now().Add(writeWait))
@@ -255,7 +297,10 @@ func (currentClient *Client) query() {
 
 			currentClient.hub.notification <- erpToSocketMessage
 
-			log.Printf("Read from query message %s for appeal %s", erpToSocketMessage.Message.Message, erpToSocketMessage.AppealID)
+			logger.WithFields(logrus.Fields{
+				"message": erpToSocketMessage.Message.Message,
+				"appeal":  erpToSocketMessage.AppealID,
+			}).Info("Read message from query:")
 		}
 	}()
 
