@@ -77,34 +77,6 @@ func init() {
 	failOnError(err, "Failed to declare a queue")
 }
 
-func home(w http.ResponseWriter, r *http.Request) {
-
-	logger.WithFields(logrus.Fields{
-		"addr":   r.RemoteAddr,
-		"method": r.Method,
-	}).Info("Http connect:")
-
-	if r.URL.Path != "/" {
-		http.Error(w, "Not found", http.StatusNotFound)
-		logger.WithFields(logrus.Fields{
-			"addr":   r.RemoteAddr,
-			"method": r.Method,
-		}).Warn("Not allowed path:")
-		return
-	}
-
-	if r.Method != "GET" {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		logger.WithFields(logrus.Fields{
-			"addr":   r.RemoteAddr,
-			"method": r.Method,
-		}).Warn("Not allowed method:")
-		return
-	}
-
-	http.ServeFile(w, r, "home.html")
-}
-
 func ws(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	logger.WithFields(logrus.Fields{
 		"addr":   r.RemoteAddr,
@@ -127,7 +99,6 @@ func main() {
 
 	go hub.run()
 
-	http.HandleFunc("/", home)
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		ws(hub, w, r)
 	})
