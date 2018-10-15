@@ -122,6 +122,7 @@ func (currentClient *Client) readPump() {
 				Addrs:     []string{os.Getenv("MONGODB_HOST")},
 				Username:  os.Getenv("MONGODB_USER"),
 				Password:  os.Getenv("MONGODB_PASSWORD"),
+				Database:  os.Getenv("MONGODB_DB"),
 				Timeout:   60 * time.Second,
 				Mechanism: "SCRAM-SHA-1",
 			}
