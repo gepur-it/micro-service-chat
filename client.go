@@ -126,9 +126,7 @@ func (currentClient *Client) readPump() {
 			mgoSession, err := mgo.DialWithInfo(mongoDBDialInfo)
 			failOnError(err, "Failed connect to mongo")
 
-			if err := mgoSession.DB(os.Getenv("MONGODB_DB")).Login(os.Getenv("MONGODB_USER"), os.Getenv("MONGODB_PASSWORD")); err != nil {
-				panic(err)
-			}
+			err = mgoSession.DB(os.Getenv("MONGODB_DB")).Login(os.Getenv("MONGODB_USER"), os.Getenv("MONGODB_PASSWORD"))
 
 			failOnError(err, "Failed auth to mongo")
 
