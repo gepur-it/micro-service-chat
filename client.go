@@ -120,16 +120,14 @@ func (currentClient *Client) readPump() {
 
 			mongoDBDialInfo := &mgo.DialInfo{
 				Addrs:     []string{os.Getenv("MONGODB_HOST")},
+				Username:  os.Getenv("MONGODB_USER"),
+				Password:  os.Getenv("MONGODB_PASSWORD"),
 				Timeout:   60 * time.Second,
 				Mechanism: "SCRAM-SHA-1",
 			}
 
 			mgoSession, err := mgo.DialWithInfo(mongoDBDialInfo)
 			failOnError(err, "Failed connect to mongo")
-
-			err = mgoSession.DB(os.Getenv("MONGODB_DB")).Login(os.Getenv("MONGODB_USER"), os.Getenv("MONGODB_PASSWORD"))
-
-			failOnError(err, "Failed auth to mongo")
 
 			mgoSession.SetMode(mgo.Monotonic, true)
 
