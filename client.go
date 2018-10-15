@@ -118,9 +118,20 @@ func (currentClient *Client) readPump() {
 				break
 			}
 
-			url := fmt.Sprintf("mongodb://%s:%s@%s/%s", os.Getenv("MONGODB_USER"), os.Getenv("MONGODB_PASSWORD"), os.Getenv("MONGODB_HOST"), os.Getenv("MONGODB_DB"))
-			mgoSession, err := mgo.Dial(url)
+			mongoDBDialInfo := &mgo.DialInfo{
+				Addrs:   []string{os.Getenv("MONGODB_HOST")},
+				Timeout: 60 * time.Second,
+			}
+
+			mgoSession, err := mgo.DialWithInfo(mongoDBDialInfo)
 			failOnError(err, "Failed connect to mongo")
+
+			if err := mgoSession.DB(os.Getenv("MONGODB_DB")).Login(os.Getenv("MONGODB_USER"), os.Getenv("MONGODB_PASSWORD")); err != nil {
+				panic(err)
+			}
+
+			failOnError(err, "Failed auth to mongo")
+
 			mgoSession.SetMode(mgo.Monotonic, true)
 
 			user := User{}
