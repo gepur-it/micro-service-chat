@@ -119,8 +119,9 @@ func (currentClient *Client) readPump() {
 			}
 
 			mongoDBDialInfo := &mgo.DialInfo{
-				Addrs:   []string{os.Getenv("MONGODB_HOST")},
-				Timeout: 60 * time.Second,
+				Addrs:     []string{os.Getenv("MONGODB_HOST")},
+				Timeout:   60 * time.Second,
+				Mechanism: "SCRAM-SHA-1",
 			}
 
 			mgoSession, err := mgo.DialWithInfo(mongoDBDialInfo)
