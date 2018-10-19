@@ -281,7 +281,7 @@ func (currentClient *Client) query() {
 	msgs, err := AMQPChannel.Consume(
 		query.Name,
 		"",
-		true,
+		false,
 		false,
 		false,
 		false,
@@ -303,6 +303,8 @@ func (currentClient *Client) query() {
 				"message": erpToSocketMessage.Message.Message,
 				"appeal":  erpToSocketMessage.AppealID,
 			}).Info("Read message from query:")
+
+			d.Ack(false)
 		}
 	}()
 
