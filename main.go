@@ -43,21 +43,9 @@ func init() {
 		panic(fmt.Sprintf("%s: %s", "Error loading .env file", err))
 	}
 
-	if os.Getenv("APP_ENV") == "prod" {
-		file, err := os.OpenFile(os.Getenv("LOG_FILE"), os.O_CREATE|os.O_WRONLY, 0666)
-
-		if err != nil {
-			panic(fmt.Sprintf("%s: %s", "Failed log to file", err))
-		}
-
-		logger.SetLevel(logrus.ErrorLevel)
-		logger.SetOutput(file)
-		logger.SetFormatter(&logrus.JSONFormatter{})
-	} else {
-		logger.SetLevel(logrus.DebugLevel)
-		logger.SetOutput(os.Stdout)
-		logger.SetFormatter(&logrus.TextFormatter{})
-	}
+	logger.SetLevel(logrus.DebugLevel)
+	logger.SetOutput(os.Stdout)
+	logger.SetFormatter(&logrus.TextFormatter{})
 
 	cs := fmt.Sprintf("amqp://%s:%s@%s:%s/%s",
 		os.Getenv("RABBITMQ_ERP_LOGIN"),
