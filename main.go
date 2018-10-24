@@ -9,19 +9,9 @@ import (
 	"os"
 )
 
-type Message struct {
-	ID             string        `json:"id"`
-	Message        string        `json:"message"`
-	Attachments    []interface{} `json:"attachments"`
-	Direction      int           `json:"direction"`
-	DeliveryStatus int           `json:"deliveryStatus"`
-	CreatedAt      string        `json:"createdAt"`
-	ReceivedAt     string        `json:"receivedAt"`
-}
-
 type ErpToSocketMessage struct {
-	AppealID string  `json:"appealId"`
-	Message  Message `json:"message"`
+	AppealID string                 `json:"appealId"`
+	Message  map[string]interface{} `json:"message"`
 }
 
 var AMQPConnection *amqp.Connection

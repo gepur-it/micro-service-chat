@@ -59,6 +59,11 @@ type User struct {
 	LastActivity time.Time `json:"lastActivity"`
 }
 
+type SocketResponse struct {
+	StatusMessage string `json:"statusMessage"`
+	StatusCode    int    `json:"statusCode"`
+}
+
 func (currentClient *Client) readPump() {
 	defer func() {
 		currentClient.hub.unregister <- currentClient
@@ -134,9 +139,22 @@ func (currentClient *Client) readPump() {
 					"appeal": currentClient.subscribe.AppealID,
 				}).Warn("Hasta la vista, baby! User %s not accept to connect this chat:")
 
+				socketResponse := SocketResponse{StatusMessage: "fail", StatusCode: 401}
+
+				bytesToSend, _ := json.Marshal(socketResponse)
+
+				currentClient.send <- bytesToSend
+
 				mgoSession.Close()
+
 				break
 			}
+
+			socketResponse := SocketResponse{StatusMessage: "ok", StatusCode: 200}
+
+			bytesToSend, err := json.Marshal(socketResponse)
+
+			currentClient.send <- bytesToSend
 
 			currentClient.subscribe = subscribe
 			mgoSession.Close()
@@ -267,8 +285,7 @@ func (currentClient *Client) query() {
 			currentClient.hub.notification <- erpToSocketMessage
 
 			logger.WithFields(logrus.Fields{
-				"message": erpToSocketMessage.Message.Message,
-				"appeal":  erpToSocketMessage.AppealID,
+				"appeal": erpToSocketMessage.AppealID,
 			}).Info("Read message from query:")
 
 			d.Ack(false)
