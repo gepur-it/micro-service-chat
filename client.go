@@ -82,7 +82,7 @@ func (currentClient *Client) readPump() {
 				logger.WithFields(logrus.Fields{
 					"error": err,
 					"addr":  currentClient.conn.RemoteAddr(),
-				}).Error("Socket error:")
+				}).Warn("Socket error:")
 			}
 
 			break
