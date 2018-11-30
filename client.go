@@ -3,12 +3,10 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"github.com/globalsign/mgo"
 	"github.com/globalsign/mgo/bson"
 	"github.com/sirupsen/logrus"
 	"github.com/streadway/amqp"
-	"log"
 	"net/http"
 	"os"
 	"time"
@@ -17,16 +15,9 @@ import (
 )
 
 const (
-	// Time allowed to write a message to the peer.
-	writeWait = 10 * time.Second
-
-	// Time allowed to read the next pong message from the peer.
-	pongWait = 60 * time.Second
-
-	// Send pings to peer with this period. Must be less than pongWait.
-	pingPeriod = (pongWait * 9) / 10
-
-	// Maximum message size allowed from peer.
+	writeWait      = 10 * time.Second
+	pongWait       = 60 * time.Second
+	pingPeriod     = (pongWait * 9) / 10
 	maxMessageSize = 512
 )
 
@@ -68,6 +59,11 @@ type User struct {
 	LastActivity time.Time `json:"lastActivity"`
 }
 
+type SocketResponse struct {
+	StatusMessage string `json:"statusMessage"`
+	StatusCode    int    `json:"statusCode"`
+}
+
 func (currentClient *Client) readPump() {
 	defer func() {
 		currentClient.hub.unregister <- currentClient
@@ -83,7 +79,6 @@ func (currentClient *Client) readPump() {
 
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("error: %v", err)
 				logger.WithFields(logrus.Fields{
 					"error": err,
 					"addr":  currentClient.conn.RemoteAddr(),
@@ -144,9 +139,22 @@ func (currentClient *Client) readPump() {
 					"appeal": currentClient.subscribe.AppealID,
 				}).Warn("Hasta la vista, baby! User %s not accept to connect this chat:")
 
+				socketResponse := SocketResponse{StatusMessage: "fail", StatusCode: 401}
+
+				bytesToSend, _ := json.Marshal(socketResponse)
+
+				currentClient.send <- bytesToSend
+
 				mgoSession.Close()
+
 				break
 			}
+
+			socketResponse := SocketResponse{StatusMessage: "ok", StatusCode: 200}
+
+			bytesToSend, err := json.Marshal(socketResponse)
+
+			currentClient.send <- bytesToSend
 
 			currentClient.subscribe = subscribe
 			mgoSession.Close()
@@ -177,22 +185,9 @@ func (currentClient *Client) readPump() {
 				break
 			}
 
-			name := fmt.Sprintf("erp_send_message")
-
-			query, err := AMQPChannel.QueueDeclare(
-				name,
-				true,
-				false,
-				false,
-				false,
-				nil,
-			)
-
-			failOnError(err, "Failed to declare a queue")
-
 			err = AMQPChannel.Publish(
 				"",
-				query.Name,
+				"erp_send_message",
 				false,
 				false,
 				amqp.Publishing{
@@ -268,18 +263,8 @@ func (currentClient *Client) writePump() {
 }
 
 func (currentClient *Client) query() {
-	query, err := AMQPChannel.QueueDeclare(
-		"erp_to_socket_message",
-		true,
-		false,
-		false,
-		false,
-		nil,
-	)
-	failOnError(err, "Failed to declare a queue")
-
 	msgs, err := AMQPChannel.Consume(
-		query.Name,
+		"erp_to_socket_message",
 		"",
 		false,
 		false,
@@ -300,8 +285,7 @@ func (currentClient *Client) query() {
 			currentClient.hub.notification <- erpToSocketMessage
 
 			logger.WithFields(logrus.Fields{
-				"message": erpToSocketMessage.Message.Message,
-				"appeal":  erpToSocketMessage.AppealID,
+				"appeal": erpToSocketMessage.AppealID,
 			}).Info("Read message from query:")
 
 			d.Ack(false)
