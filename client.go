@@ -261,36 +261,3 @@ func (currentClient *Client) writePump() {
 		}
 	}
 }
-
-func (currentClient *Client) query() {
-	msgs, err := AMQPChannel.Consume(
-		"erp_to_socket_message",
-		"",
-		false,
-		false,
-		false,
-		false,
-		nil,
-	)
-	failOnError(err, "Failed to register a consumer")
-
-	forever := make(chan bool)
-
-	go func() {
-		for d := range msgs {
-			erpToSocketMessage := &ErpToSocketMessage{}
-			err := json.Unmarshal(d.Body, &erpToSocketMessage)
-			failOnError(err, "Can`t decode query callBack")
-
-			currentClient.hub.notification <- erpToSocketMessage
-
-			logger.WithFields(logrus.Fields{
-				"appeal": erpToSocketMessage.AppealID,
-			}).Info("Read message from query:")
-
-			d.Ack(false)
-		}
-	}()
-
-	<-forever
-}
