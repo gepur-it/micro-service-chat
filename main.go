@@ -5,23 +5,15 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 	"github.com/streadway/amqp"
+	"github.com/zbindenren/logrus_mail"
 	"net/http"
 	"os"
+	"strconv"
 )
 
-type Message struct {
-	ID             string        `json:"id"`
-	Message        string        `json:"message"`
-	Attachments    []interface{} `json:"attachments"`
-	Direction      int           `json:"direction"`
-	DeliveryStatus int           `json:"deliveryStatus"`
-	CreatedAt      string        `json:"createdAt"`
-	ReceivedAt     string        `json:"receivedAt"`
-}
-
 type ErpToSocketMessage struct {
-	AppealID string  `json:"appealId"`
-	Message  Message `json:"message"`
+	AppealID string                 `json:"appealId"`
+	Message  map[string]interface{} `json:"message"`
 }
 
 var AMQPConnection *amqp.Connection
@@ -37,27 +29,45 @@ func failOnError(err error, msg string) {
 	}
 }
 
+func getenvInt(key string) (int, error) {
+	s := os.Getenv(key)
+	v, err := strconv.Atoi(s)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return v, nil
+}
+
 func init() {
 	err := godotenv.Load()
+
 	if err != nil {
 		panic(fmt.Sprintf("%s: %s", "Error loading .env file", err))
 	}
 
-	if os.Getenv("APP_ENV") == "prod" {
-		file, err := os.OpenFile(os.Getenv("LOG_FILE"), os.O_CREATE|os.O_WRONLY, 0666)
+	port, err := getenvInt("LOGTOEMAIL_SMTP_PORT")
 
-		if err != nil {
-			panic(fmt.Sprintf("%s: %s", "Failed log to file", err))
-		}
-
-		logger.SetLevel(logrus.ErrorLevel)
-		logger.SetOutput(file)
-		logger.SetFormatter(&logrus.JSONFormatter{})
-	} else {
-		logger.SetLevel(logrus.DebugLevel)
-		logger.SetOutput(os.Stdout)
-		logger.SetFormatter(&logrus.TextFormatter{})
+	if err != nil {
+		panic(fmt.Sprintf("%s: %s", "Error read smtp port from env", err))
 	}
+
+	hook, err := logrus_mail.NewMailAuthHook(
+		os.Getenv("LOGTOEMAIL_APP_NAME"),
+		os.Getenv("LOGTOEMAIL_SMTP_HOST"),
+		port,
+		os.Getenv("LOGTOEMAIL_SMTP_FROM"),
+		os.Getenv("LOGTOEMAIL_SMTP_TO"),
+		os.Getenv("LOGTOEMAIL_SMTP_USERNAME"),
+		os.Getenv("LOGTOEMAIL_SMTP_PASSWORD"),
+	)
+
+	logger.SetLevel(logrus.DebugLevel)
+	logger.SetOutput(os.Stdout)
+	logger.SetFormatter(&logrus.TextFormatter{})
+
+	logger.Hooks.Add(hook)
 
 	cs := fmt.Sprintf("amqp://%s:%s@%s:%s/%s",
 		os.Getenv("RABBITMQ_ERP_LOGIN"),
@@ -75,6 +85,8 @@ func init() {
 	AMQPChannel = channel
 
 	failOnError(err, "Failed to declare a queue")
+
+	logger.WithFields(logrus.Fields{}).Info("Server init:")
 }
 
 func ws(hub *Hub, w http.ResponseWriter, r *http.Request) {
@@ -95,6 +107,7 @@ func ws(hub *Hub, w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	logger.WithFields(logrus.Fields{}).Info("Server starting:")
 	hub := hub()
 
 	go hub.run()
@@ -109,4 +122,5 @@ func main() {
 
 	defer AMQPConnection.Close()
 	defer AMQPChannel.Close()
+	logger.WithFields(logrus.Fields{}).Info("Server stopped:")
 }
