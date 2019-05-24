@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -48,6 +49,7 @@ type Client struct {
 	conn      *websocket.Conn
 	send      chan []byte
 	subscribe Subscribe
+	mu        sync.Mutex
 }
 
 type Subscribe struct {
@@ -223,6 +225,8 @@ func (currentClient *Client) writePump() {
 	for {
 		select {
 		case message, ok := <-currentClient.send:
+			currentClient.mu.Lock()
+
 			currentClient.conn.SetWriteDeadline(time.Now().Add(writeWait))
 
 			if !ok {
@@ -250,6 +254,8 @@ func (currentClient *Client) writePump() {
 			if err := w.Close(); err != nil {
 				return
 			}
+
+			currentClient.mu.Unlock()
 
 			logger.WithFields(logrus.Fields{
 				"addr":   currentClient.conn.RemoteAddr(),
