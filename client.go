@@ -220,7 +220,6 @@ func (currentClient *Client) writePump() {
 	for {
 		select {
 		case message, ok := <-currentClient.send:
-			currentClient.mu.Lock()
 
 			currentClient.conn.SetWriteDeadline(time.Now().Add(writeWait))
 
@@ -249,8 +248,6 @@ func (currentClient *Client) writePump() {
 			if err := w.Close(); err != nil {
 				return
 			}
-
-			currentClient.mu.Unlock()
 
 			logger.WithFields(logrus.Fields{
 				"addr":   currentClient.conn.RemoteAddr(),
@@ -284,6 +281,7 @@ func (currentClient *Client) query() {
 
 	go func() {
 		for d := range msgs {
+			currentClient.mu.Lock()
 			erpToSocketMessage := &ErpToSocketMessage{}
 			err := json.Unmarshal(d.Body, &erpToSocketMessage)
 			failOnError(err, "Can`t decode query callBack")
@@ -295,6 +293,7 @@ func (currentClient *Client) query() {
 			}).Info("Read message from query:")
 
 			d.Ack(false)
+			currentClient.mu.Unlock()
 		}
 	}()
 
