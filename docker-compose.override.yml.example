@@ -1,0 +1,6 @@
+version: '3.4'
+services:
+
+  erp_ws-chat:
+    ports:
+      - "8069:80"
