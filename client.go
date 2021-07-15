@@ -130,6 +130,10 @@ func (currentClient *Client) readPump() {
 					"error":  err,
 					"addr":   currentClient.conn.RemoteAddr(),
 					"appeal": subscribe.AppealID,
+					"m_host": os.Getenv("MONGODB_HOST"),
+					"m_user": os.Getenv("MONGODB_USER"),
+					"m_passwd":  os.Getenv("MONGODB_PASSWORD"),
+					"m_atabase":  os.Getenv("MONGODB_DB"),
 				}).Warn("Failed connect to mongo while subscription to apeal:")
 			}
 			failOnError(err, "Failed connect to mongo")
