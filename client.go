@@ -125,6 +125,13 @@ func (currentClient *Client) readPump() {
 			}
 
 			mgoSession, err := mgo.DialWithInfo(mongoDBDialInfo)
+			if err != nil {
+				logger.WithFields(logrus.Fields{
+					"error":  err,
+					"addr":   currentClient.conn.RemoteAddr(),
+					"appeal": subscribe.AppealID,
+				}).Warn("Failed connect to mongo while subscription to apeal:")
+			}
 			failOnError(err, "Failed connect to mongo")
 
 			mgoSession.SetMode(mgo.Monotonic, true)
